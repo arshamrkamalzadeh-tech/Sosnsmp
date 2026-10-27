@@ -2,6 +2,8 @@
 const crypto = require('crypto');
 const E = process.env;
 const TOKEN = (E.BOT_TOKEN || '').trim();
+/* سروش‌پلاس برای امضای initData فقط بخش بعد از «:» توکن را به‌کار می‌برد */
+const SIGN_KEY = TOKEN.includes(':') ? TOKEN.split(':').pop() : TOKEN;
 const SECRET = E.WEBHOOK_SECRET || '';
 const ADMIN = String(E.ADMIN_ID || '');
 const CARD = E.CARD || 'شماره کارت تنظیم نشده';
@@ -45,41 +47,6 @@ async function tg(method, p) {
 const say = (id, text) => (id ? tg('sendMessage', { chat_id: id, text }) : null);
 const tellAdmin = text => say(ADMIN, text);
 
-/* ---------- عیب‌یابی موقت: فقط با DEBUG_AUTH=1 ؛ بعد از رفع مشکل حذف کنید ---------- */
-function debugAuth(init) {
-  const out = { tokenLen: TOKEN.length, tokenHasSpace: TOKEN !== TOKEN.trim(), tokenHasColon: TOKEN.includes(':'), initLen: init.length };
-  try {
-    const p = new URLSearchParams(init);
-    out.keys = [...p.keys()];
-    const hash = p.get('hash'); out.hasHash = !!hash;
-    const T = TOKEN.trim();
-    const tokens = { token: T, noBotPrefix: T.replace(/^bot/i, ''), afterColon: T.split(':').pop(), beforeColon: T.split(':')[0] };
-    const tries = [];
-    const hx = (k, m) => crypto.createHmac('sha256', k).update(m).digest('hex');
-    const dcsOf = (sep, dropKeys, raw) => {
-      let ents;
-      if (raw) ents = init.split('&').map(x => { const i = x.indexOf('='); return [x.slice(0, i), x.slice(i + 1)]; });
-      else ents = [...new URLSearchParams(init).entries()];
-      return ents.filter(([k]) => k !== 'hash' && !dropKeys.includes(k)).sort((x, y) => (x[0] < y[0] ? -1 : 1)).map(([k, v]) => k + '=' + v).join(sep);
-    };
-    for (const [tn, tk] of Object.entries(tokens)) {
-      const secrets = {
-        'key=WebAppData,msg=token': crypto.createHmac('sha256', 'WebAppData').update(tk).digest(),
-        'key=token,msg=WebAppData': crypto.createHmac('sha256', tk).update('WebAppData').digest(),
-        'sha256(token)': crypto.createHash('sha256').update(tk).digest(),
-        'token-raw': Buffer.from(tk)
-      };
-      for (const [sn, sec] of Object.entries(secrets)) {
-        for (const raw of [false, true]) for (const sep of ['\n', '&']) for (const drop of [[], ['signature']]) {
-          if (hx(sec, dcsOf(sep, drop, raw)) === hash) tries.push(`OK: ${tn} | ${sn} | raw=${raw} | sep=${JSON.stringify(sep)} | drop=${drop}`);
-        }
-      }
-    }
-    out.matched = tries.length ? tries : 'هیچ حالتی نخورد';
-  } catch (e) { out.error = String(e.message) }
-  return out;
-}
-
 /* ---------- احراز هویت initData ---------- */
 function auth(req) {
   const init = req.headers['x-init'] || '';
@@ -91,7 +58,7 @@ function auth(req) {
     if (hash) {
       p.delete('hash');
       const dcs = [...p.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(([k, v]) => k + '=' + v).join('\n');
-      const sec = crypto.createHmac('sha256', 'WebAppData').update(TOKEN).digest();
+      const sec = crypto.createHmac('sha256', 'WebAppData').update(SIGN_KEY).digest();
       const h = crypto.createHmac('sha256', sec).update(dcs).digest('hex');
       valid = h.length === hash.length && crypto.timingSafeEqual(Buffer.from(h), Buffer.from(hash));
     }
@@ -101,10 +68,7 @@ function auth(req) {
     /* فقط برای تست: TRUST_INITDATA=1 — بعد از تست حتماً حذف کنید! */
     if (E.TRUST_INITDATA === '1') {
       if (!user) { try { const j = JSON.parse(init); user = j.user || j; } catch (e) {} }
-    } else {
-      if (E.DEBUG_AUTH === '1') throw err(401, 'DEBUG: ' + JSON.stringify(debugAuth(init)));
-      throw err(401, 'اعتبارسنجی initData ناموفق بود (توکن بات یا فرمت initData را بررسی کنید)');
-    }
+    } else throw err(401, 'اعتبارسنجی initData ناموفق بود (توکن بات یا فرمت initData را بررسی کنید)');
   }
   if (!user || !user.id) throw err(401, 'کاربر شناسایی نشد');
   return { id: String(user.id), username: String(user.username || '').toLowerCase() };
@@ -331,5 +295,5 @@ async function webhook(req, key) {
 
   await say(chat, 'برای استفاده از بازارچه دکمهٔ منوی بات را بزنید.');
   return { ok: true };
-    }
-        
+  }
+      
