@@ -4,6 +4,8 @@ const E = process.env;
 const TOKEN = (E.BOT_TOKEN || '').trim();
 /* سروش‌پلاس برای امضای initData فقط بخش بعد از «:» توکن را به‌کار می‌برد */
 const SIGN_KEY = TOKEN.includes(':') ? TOKEN.split(':').pop() : TOKEN;
+/* توکن باتِ دوم (اختیاری) فقط برای تأیید امضا: BOT_TOKEN_2 */
+const KEYS = [...new Set([SIGN_KEY, TOKEN, ...String(E.BOT_TOKEN_2 || '').split(',').map(x => x.trim()).filter(Boolean).flatMap(t => [t.split(':').pop(), t])])];
 const SECRET = E.WEBHOOK_SECRET || '';
 const ADMIN = String(E.ADMIN_ID || '');
 const CARD = E.CARD || 'شماره کارت تنظیم نشده';
@@ -49,7 +51,7 @@ const tellAdmin = text => say(ADMIN, text);
 
 /* ---------- عیب‌یابی موقت: فقط با DEBUG_AUTH=1 ---------- */
 function debugAuth(init) {
-  const out = { tokenId: TOKEN.split(':')[0], signKeyLen: SIGN_KEY.length, initLen: init.length };
+  const out = { tokenId: TOKEN.split(':')[0], extraIds: String(E.BOT_TOKEN_2 || '').split(',').map(x => x.trim().split(':')[0]).filter(Boolean), signKeyLen: SIGN_KEY.length, initLen: init.length };
   try {
     const p = new URLSearchParams(init);
     out.keys = [...p.keys()];
@@ -91,7 +93,7 @@ function sigOk(entries, hash) {
   for (const f of forms) {
     const ents = entries.map(e => [e[0], e[0] === 'user' && f !== null ? f : e[1]]);
     const dcs = ents.sort((x, y) => (x[0] < y[0] ? -1 : 1)).map(([k, v]) => k + '=' + v).join('\n');
-    for (const k of [SIGN_KEY, TOKEN]) {
+    for (const k of KEYS) {
       const sec = crypto.createHmac('sha256', 'WebAppData').update(k).digest();
       const h = crypto.createHmac('sha256', sec).update(dcs).digest('hex');
       if (h.length === hash.length && crypto.timingSafeEqual(Buffer.from(h), Buffer.from(hash))) return true;
@@ -175,7 +177,7 @@ async function route(req, parts) {
     const url = `https://${req.headers.host}/api/webhook/${SECRET}`;
     return { url, result: await tg('setWebhook', { url }) };
   }
-  if (a === 'ping') return { version: 'v5-forms', hasToken: !!TOKEN, hasSecret: !!SECRET, hasAdmin: !!ADMIN, hasRedis: !!(RURL && RTOK) };
+  if (a === 'ping') return { version: 'v6-multi', hasToken: !!TOKEN, hasSecret: !!SECRET, hasAdmin: !!ADMIN, hasRedis: !!(RURL && RTOK) };
   if (a === 'cron') { await sweep(); return { ok: true }; }
 
   const user = auth(req);
