@@ -17,6 +17,7 @@ body:before{content:"";position:fixed;inset:-30% -20% auto -20%;height:340px;bac
 .hero h1 b{background:linear-gradient(90deg,var(--g1),var(--g2));-webkit-background-clip:text;background-clip:text;color:transparent}
 .hero p{color:var(--hint);font-size:13px}
 .sellbtn{border:1px solid var(--line);background:var(--card);color:var(--tx);border-radius:12px;padding:8px 12px;font:inherit;font-size:13px;font-weight:700;white-space:nowrap}
+.backbtn{border:0;background:none;color:var(--g1);font:inherit;font-size:14px;font-weight:700;padding:14px 0 0}
 .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0}
 .stat{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px 6px;text-align:center}
 .stat b{display:block;font-size:16px}.stat span{font-size:11px;color:var(--hint)}
@@ -58,8 +59,10 @@ h2{font-size:18px;margin:10px 0 12px}
 input.f,textarea.f{width:100%;padding:13px;border-radius:14px;border:1px solid var(--line);background:var(--card);color:var(--tx);font:inherit;margin-bottom:10px;outline:0}
 input.f:focus,textarea.f:focus{border-color:var(--g1)}
 .btn{width:100%;padding:14px;border:0;border-radius:14px;background:linear-gradient(90deg,var(--g1),var(--g2));color:#fff;font:inherit;font-weight:800;margin-top:8px}
+.btn:disabled{opacity:.6}
 .btn.alt{background:var(--card);border:1px solid var(--line);color:var(--tx)}.btn.bad{background:var(--bad)}
 #fb{position:fixed;inset:auto 14px 14px}
+#fb .btn{margin:0;box-shadow:0 6px 22px rgba(59,130,246,.35)}
 .code{font:800 46px/1.2 monospace;letter-spacing:10px;text-align:center;padding:16px 0;direction:ltr;background:linear-gradient(90deg,var(--g1),var(--g2));-webkit-background-clip:text;background-clip:text;color:transparent}
 .steps{display:flex;gap:4px;margin:12px 0}.steps i{flex:1;height:5px;border-radius:9px;background:var(--hint);opacity:.3}.steps i.on{background:var(--ok);opacity:1}
 .trust{display:flex;gap:10px;align-items:flex-start;font-size:13px;color:var(--hint)}.trust b{color:var(--tx)}
@@ -73,35 +76,60 @@ const W=window.Soroush&&Soroush.WebApp, $=s=>document.querySelector(s), app=$('#
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const fa=n=>Number(n).toLocaleString('fa-IR');
 const short=n=>n>=1e6?fa(+(n/1e6).toFixed(1))+' م':n>=1e3?fa(Math.round(n/1e3))+' هزار':fa(n);
+/* تبدیل ارقام فارسی/عربی به انگلیسی */
+const en=s=>String(s??'').replace(/[۰-۹]/g,d=>'۰۱۲۳۴۵۶۷۸۹'.indexOf(d)).replace(/[٠-٩]/g,d=>'٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[,،٬\s]/g,'');
 const ST={wait_pay:['در انتظار پرداخت',0],paid:['پرداخت شد؛ منتظر تحویل',1],handed:['تحویل شد؛ قفل زمانی',2],dispute:['در بررسی پشتیبانی',2],due:['در حال واریز',3],done:['تکمیل شد',4],cancel:['لغو شد',-1]};
-let stack=[],cur={v:'home'},tmr=null,mainFn=null;
+let stack=[],cur={v:'home'},tmr=null,pol=null;
 const S={seg:'market',q:'',chip:'all',sort:'new',data:null};
 
-function theme(){const t=W&&W.themeParams||{};
+function theme(){const t=(W&&W.themeParams)||{};
  if(t.bg_color)document.documentElement.style.setProperty('--bg',t.bg_color);
- if(t.button_color){document.documentElement.style.setProperty('--btn',t.button_color)}}
+ if(t.button_color)document.documentElement.style.setProperty('--btn',t.button_color)}
+
+/* ---- API با تایم‌اوت و پیام خطای واضح ---- */
 async function api(p,body){
- const r=await fetch('/api'+p,{method:body?'POST':'GET',headers:{'X-Init':W?W.initData:'','Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});
- const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||'خطای شبکه');return j}
-const hap=t=>W&&W.HapticFeedback&&W.HapticFeedback.notificationOccurred(t);
-const alertx=m=>W?W.showAlert(m):alert(m);
+ const ctl=new AbortController(),to=setTimeout(()=>ctl.abort(),15000);
+ let r;
+ try{
+  r=await fetch('/api'+p,{method:body?'POST':'GET',signal:ctl.signal,
+   headers:{'X-Init':(W&&W.initData)||'','Content-Type':'application/json'},
+   body:body?JSON.stringify(body):undefined});
+ }catch(e){clearTimeout(to);throw new Error(e.name=='AbortError'?'سرور دیر پاسخ داد. دوباره تلاش کنید':'اتصال به سرور برقرار نشد (آدرس /api یا اینترنت را بررسی کنید)')}
+ clearTimeout(to);
+ const txt=await r.text();let j={};try{j=JSON.parse(txt)}catch(e){}
+ if(!r.ok)throw new Error(j.error||('خطای سرور ('+r.status+')'));
+ if(!txt||j===null||typeof j!=='object')throw new Error('پاسخ نامعتبر از سرور (احتمالاً مسیر /api تنظیم نیست)');
+ return j}
+const hap=t=>{try{W&&W.HapticFeedback&&W.HapticFeedback.notificationOccurred(t)}catch(e){}};
+const alertx=m=>{try{W&&W.showAlert?W.showAlert(m):alert(m)}catch(e){alert(m)}};
+const confirmx=(m,cb)=>{try{W&&W.showConfirm?W.showConfirm(m,ok=>ok&&cb()):confirm(m)&&cb()}catch(e){confirm(m)&&cb()}};
+
+/* ---- دکمه اصلی: همیشه داخل خود صفحه ---- */
 function main(t,fn){
- const B=W&&(W.MainButton||W.BottomButton);
- if(!B){$('#fb').innerHTML=t?'<button class=btn id=fbb>'+t+'</button>':'';if(t)$('#fbb').onclick=fn;return}
- if(mainFn)B.offClick(mainFn);mainFn=fn;
- if(!t){B.hide();return}B.setText(t);B.onClick(fn);B.show()}
+ const fb=$('#fb');
+ if(!t){fb.innerHTML='';return}
+ fb.innerHTML='<button class=btn id=fbb></button>';
+ const b=$('#fbb');b.textContent=t;
+ b.onclick=async()=>{if(b.disabled)return;b.disabled=true;try{await fn()}finally{b.disabled=false}};
+}
 function go(v,a){stack.push(cur);cur={v,a};render()}
-function back(){if(tmr)clearInterval(tmr);cur=stack.pop()||{v:'home'};render()}
-async function act(fn){try{await fn()}catch(e){hap('error');alertx(e.message)}}
+function back(){cur=stack.pop()||{v:'home'};render()}
+async function act(fn){try{await fn()}catch(e){hap('error');alertx(e.message||'خطای ناشناخته')}}
+function backBar(){return stack.length?'<button class=backbtn data-back=1>→ بازگشت</button>':''}
 
 async function render(){
- if(tmr){clearInterval(tmr);tmr=null}main('');
- const bb=W&&W.BackButton;if(bb){stack.length?bb.show():bb.hide()}
+ if(tmr){clearInterval(tmr);tmr=null}
+ if(pol){clearInterval(pol);pol=null}
+ main('');
+ try{const bb=W&&W.BackButton;if(bb){stack.length?bb.show():bb.hide()}}catch(e){}
  window.scrollTo(0,0);
- await act(()=>({home,sell,code,detail,deals,deal}[cur.v]()));
+ const f={home,sell,code,detail,deals,deal}[cur.v];
+ try{await f()}catch(e){
+  hap('error');
+  app.innerHTML=backBar()+`<div class=empty><big>⚠️</big>${esc(e.message||'خطا')}<br><br><button class="btn alt" data-retry=1>تلاش دوباره</button></div>`}
 }
 
-/* ---------- خانه: اول بازار ---------- */
+/* ---------- خانه ---------- */
 const CHIPS=[['all','همه'],['l3','۳ حرفی'],['l4','۴ حرفی'],['l5','۵ حرفی'],['l6','۶+'],['alpha','فقط حروف'],['num','دارای عدد'],['ok','فروشنده باتجربه'],['u1','زیر ۱ میلیون'],['u5','زیر ۵ میلیون']];
 function pass(l){
  const n=l.uname,c=S.chip;
@@ -120,15 +148,16 @@ function card(l){
  if(l.uname.length<=4)b.push('<span class="b gold">کوتاه</span>');
  if((l.done||0)>0)b.push(`<span class="b ok">✓ ${fa(l.done)} فروش</span>`);
  if(l.mine)b.push('<span class="b me">آگهی شما</span>');
- return `<div class=u data-go=detail data-a=${l.id}><div class=nm><i>@</i>${esc(l.uname)}</div><div class=pr>${fa(l.price)} <small>تومان</small></div><div class=bd>${b.join('')}</div></div>`}
+ return `<div class=u data-go=detail data-a="${esc(l.id)}"><div class=nm><i>@</i>${esc(l.uname)}</div><div class=pr>${fa(l.price)} <small>تومان</small></div><div class=bd>${b.join('')}</div></div>`}
 function soldCard(l){return `<div class="u sold"><div class=nm><i>@</i>${esc(l.uname)}</div><div class=pr>${fa(l.price)} <small>تومان</small></div></div>`}
 function list(){
  const D=S.data,el=$('#list');if(!el||!D)return;
- let items=S.seg=='sold'?D.sold:sorted(D.items.filter(pass));
- $('#cnt').textContent=fa(items.length)+(S.seg=='sold'?' فروش اخیر':' آیدی');
+ const items=S.seg=='sold'?(D.sold||[]):sorted((D.items||[]).filter(pass));
+ const c=$('#cnt');if(c)c.textContent=fa(items.length)+(S.seg=='sold'?' فروش اخیر':' آیدی');
  el.innerHTML=items.length?items.map(S.seg=='sold'?soldCard:card).join(''):
   `<div class=empty><big>${S.seg=='sold'?'🕓':'🔎'}</big>${S.seg=='sold'?'هنوز فروشی ثبت نشده':'آیدی با این مشخصات پیدا نشد'}<br><span class=hint>می‌توانید خودتان آیدی آگهی کنید</span></div>`}
 async function home(){
+ stack=[];
  app.innerHTML=`<div class=hero><div><h1>بازارچه <b>آیدی</b></h1><p>خرید و فروش امن با امانت‌داری</p></div><button class=sellbtn data-go=sell>＋ آگهی فروش</button></div>
  <div class=stats><div class=stat><b id=s1>—</b><span>آیدی فعال</span></div><div class=stat><b id=s2>—</b><span>فروش موفق</span></div><div class=stat><b id=s3>—</b><span>حجم معاملات</span></div></div>
  <div class=search><input id=sq dir=ltr placeholder="جستجوی آیدی…" value="${esc(S.q)}" autocomplete=off autocapitalize=off></div>
@@ -140,50 +169,60 @@ async function home(){
   `<div class=meta><span id=cnt></span>${S.seg=='market'?`<select id=so><option value=new>جدیدترین</option><option value=low>ارزان‌ترین</option><option value=high>گران‌ترین</option><option value=len>کوتاه‌ترین</option></select>`:''}</div><div class=grid id=list>${'<div class=sk></div>'.repeat(6)}</div>`;
  if($('#so')){$('#so').value=S.sort;$('#so').onchange=e=>{S.sort=e.target.value;list()}}
  const D=S.data=await api('/listings');
- $('#s1').textContent=fa(D.stats.active);$('#s2').textContent=fa(D.stats.sold);$('#s3').textContent=short(D.stats.volume);
- window._L=D.items;list();
+ const st=D.stats||{};
+ $('#s1').textContent=fa(st.active||0);$('#s2').textContent=fa(st.sold||0);$('#s3').textContent=short(st.volume||0);
+ window._L=D.items||[];list();
 }
 async function dealsTab(){
  $('.search').style.display='none';
  $('#body').innerHTML='<div class=grid id=list style="grid-template-columns:1fr">'+'<div class=sk></div>'.repeat(3)+'</div>';
- const{items}=await api('/deals');
- $('#list').innerHTML=items.length?items.map(d=>`<div class=u data-go=deal data-a=${d.id}><div class=row><span class=nm style="font-size:17px"><i>@</i>${esc(d.uname)}</span><span class=tag>${d.role=='buyer'?'خرید':'فروش'}</span></div><div class=row style="margin-top:6px"><span class=hint>${ST[d.status][0]}</span><span class=price>${fa(d.price)} تومان</span></div></div>`).join(''):'<div class=empty><big>🤝</big>هنوز معامله‌ای ندارید</div>';
+ const r=await api('/deals');const items=r.items||[];
+ $('#list').innerHTML=items.length?items.map(d=>{const s=ST[d.status]||[d.status,0];return `<div class=u data-go=deal data-a="${esc(d.id)}"><div class=row><span class=nm style="font-size:17px"><i>@</i>${esc(d.uname)}</span><span class=tag>${d.role=='buyer'?'خرید':'فروش'}</span></div><div class=row style="margin-top:6px"><span class=hint>${s[0]}</span><span class=price>${fa(d.price)} تومان</span></div></div>`}).join(''):'<div class=empty><big>🤝</big>هنوز معامله‌ای ندارید</div>';
 }
 
 /* ---------- جزئیات آگهی ---------- */
 function detail(){
- const l=(window._L||[]).find(x=>x.id==cur.a);if(!l)return back();
- const fee=Math.round(l.price*0.05);
- app.innerHTML=`<h2>جزئیات آیدی</h2><div class=panel><div class=big><i>@</i>${esc(l.uname)}</div>
+ const l=(window._L||[]).find(x=>x.id==cur.a);if(!l){cur={v:'home'};return render()}
+ app.innerHTML=backBar()+`<h2>جزئیات آیدی</h2><div class=panel><div class=big><i>@</i>${esc(l.uname)}</div>
  <div class=row style="margin-top:12px"><span class=price style="font-size:22px">${fa(l.price)} تومان</span><span class="b ok">${(l.done||0)>0?'✓ '+fa(l.done)+' فروش موفق':'فروشنده جدید'}</span></div>
  <p style="margin-top:10px">${esc(l.descr)||'<span class=hint>بدون توضیحات</span>'}</p></div>
  <div class=panel><div class=trust><span style="font-size:22px">🛡️</span><div><b>مالکیت تأییدشده</b><br>فروشنده با ارسال کد از همین اکانت ثابت کرده صاحب این آیدی است.</div></div></div>
  <div class=panel><div class=trust><span style="font-size:22px">🔒</span><div><b>خرید امن با امانت‌داری</b><br>پول شما نزد ما می‌ماند؛ بعد از تحویل، قفل زمانی دارید تا تأیید یا شکایت کنید و فقط بعد از آن به فروشنده واریز می‌شود.</div></div></div>`;
- if(!l.mine)main('خرید امن — '+fa(l.price)+' تومان',()=>act(async()=>{const r=await api('/deals',{lid:l.id});hap('success');stack.pop();cur={v:'deal',a:r.id};render()}));
+ if(!l.mine)main('خرید امن — '+fa(l.price)+' تومان',()=>act(async()=>{const r=await api('/deals',{lid:l.id});hap('success');cur={v:'deal',a:r.id};render()}));
 }
 
 /* ---------- ثبت آگهی ---------- */
 function sell(){
- app.innerHTML=`<h2>ثبت آگهی فروش</h2><input class=f id=u dir=ltr placeholder="آیدی، مثلاً myname" autocapitalize=off><input class=f id=p type=number inputmode=numeric placeholder="قیمت به تومان"><textarea class=f id=d rows=3 maxlength=300 placeholder="توضیحات (اختیاری)"></textarea>
+ app.innerHTML=backBar()+`<h2>ثبت آگهی فروش</h2><input class=f id=u dir=ltr placeholder="آیدی، مثلاً myname" autocapitalize=off autocomplete=off><input class=f id=p inputmode=numeric placeholder="قیمت به تومان"><textarea class=f id=d rows=3 maxlength=300 placeholder="توضیحات (اختیاری)"></textarea>
  <div class=panel><div class=trust><span style="font-size:22px">🛡️</span><div>برای اثبات مالکیت یک کد ۴ رقمی می‌گیرید که باید با <b>همان اکانتی که این آیدی را دارد</b> برای بات بفرستید.</div></div></div>`;
- main('دریافت کد تأیید',()=>act(async()=>{const r=await api('/verify/start',{uname:$('#u').value,price:$('#p').value,descr:$('#d').value});
-  stack.pop();cur={v:'code',a:r};render()}));
+ main('دریافت کد تأیید',()=>act(async()=>{
+  const uname=$('#u').value.trim().replace(/^@/,'').toLowerCase();
+  const price=parseInt(en($('#p').value),10);
+  if(!/^[a-z][a-z0-9_]{2,31}$/.test(uname))throw new Error('آیدی معتبر نیست (فقط حروف انگلیسی، عدد و _ ؛ حداقل ۳ کاراکتر و شروع با حرف)');
+  if(!price||price<1000)throw new Error('قیمت را درست وارد کنید (حداقل ۱٬۰۰۰ تومان)');
+  const r=await api('/verify/start',{uname,price,descr:$('#d').value.trim()});
+  cur={v:'code',a:r};render()}));
 }
 function code(){
- const r=cur.a;let left=r.ttl;
- const draw=(msg)=>app.innerHTML=`<h2>کد تأیید مالکیت</h2><div class=panel><div class=code>${r.code}</div><p class=hint style="text-align:center">این عدد را دقیقاً برای @${esc(r.bot)} بفرستید</p></div><p style="text-align:center">${msg||'⏳ '+Math.floor(left/60)+':'+String(left%60).padStart(2,'0')}</p>`;
- draw();stack=[{v:'home'}];if(W&&W.BackButton)W.BackButton.show();
- tmr=setInterval(async()=>{left--;try{const s=await api('/verify/status');
-  if(s.state=='ok'){clearInterval(tmr);hap('success');S.seg='market';alertx('مالکیت تأیید و آگهی ثبت شد ✅');stack=[];cur={v:'home'};render();return}
-  if(s.state=='fail'||s.state=='expired'||left<=0){clearInterval(tmr);hap('error');draw('❌ '+(s.why||'کد منقضی شد')+' — دوباره تلاش کنید');return}
-  draw()}catch(e){}},1000);
+ const r=cur.a;let left=r.ttl,busy=false,fin=false;
+ const draw=(msg)=>app.innerHTML=backBar()+`<h2>کد تأیید مالکیت</h2><div class=panel><div class=code>${esc(r.code)}</div><p class=hint style="text-align:center">این عدد را دقیقاً برای @${esc(r.bot)} بفرستید</p></div><p style="text-align:center">${msg||'⏳ '+Math.floor(left/60)+':'+String(left%60).padStart(2,'0')}</p>`;
+ stack=[{v:'home'}];draw();
+ const stop=()=>{fin=true;clearInterval(tmr);clearInterval(pol);tmr=pol=null};
+ /* شمارش معکوس هر ثانیه، استعلام هر ۳ ثانیه */
+ tmr=setInterval(()=>{if(fin)return;left--;if(left<=0){stop();draw('❌ کد منقضی شد — دوباره تلاش کنید');return}
+  const p=$('#app p:last-child');if(p)p.textContent='⏳ '+Math.floor(left/60)+':'+String(left%60).padStart(2,'0')},1000);
+ pol=setInterval(async()=>{if(busy||fin)return;busy=true;
+  try{const s=await api('/verify/status');if(fin)return;
+   if(s.state=='ok'){stop();hap('success');S.seg='market';stack=[];cur={v:'home'};await render();alertx('مالکیت تأیید و آگهی ثبت شد ✅');return}
+   if(s.state=='fail'||s.state=='expired'){stop();hap('error');draw('❌ '+(s.why||'کد منقضی شد')+' — دوباره تلاش کنید')}
+  }catch(e){}finally{busy=false}},3000);
 }
-function deals(){S.seg='deals';cur={v:'home'};return render()}
+function deals(){S.seg='deals';stack=[];cur={v:'home'};return render()}
 
 /* ---------- معامله ---------- */
 async function deal(){
- const id=cur.a,d=await api('/deals/'+id),s=ST[d.status],B=d.role=='buyer';
- let h=`<h2>معامله #${fa(id)}</h2><div class=panel><div class=big style="font-size:24px"><i>@</i>${esc(d.uname)}</div><div class=row style="margin-top:8px"><span>${s[0]}</span><span class=price>${fa(d.price)} تومان</span></div><div class=steps>${[0,1,2,3,4].map(i=>`<i class="${s[1]>=i&&s[1]>=0?'on':''}"></i>`).join('')}</div>`;
+ const id=cur.a,d=await api('/deals/'+id),s=ST[d.status]||[d.status,0],B=d.role=='buyer';
+ let h=backBar()+`<h2>معامله #${fa(id)}</h2><div class=panel><div class=big style="font-size:24px"><i>@</i>${esc(d.uname)}</div><div class=row style="margin-top:8px"><span>${s[0]}</span><span class=price>${fa(d.price)} تومان</span></div><div class=steps>${[0,1,2,3,4].map(i=>`<i class="${s[1]>=0&&s[1]>=i?'on':''}"></i>`).join('')}</div>`;
  if(B&&d.status=='wait_pay')h+=`<p>مبلغ را کارت‌به‌کارت کنید و <b>عکس رسید</b> را برای بات بفرستید:</p><div class=code style="font-size:20px;letter-spacing:2px">${esc(d.card)}</div>`;
  if(d.status=='handed')h+=`<p class=hint>قفل زمانی: ${Math.floor(d.lock/3600)} ساعت و ${Math.floor(d.lock%3600/60)} دقیقه مانده</p>`;
  if(!B&&d.status=='paid')h+=`<p>خریدار پرداخت کرده. آیدی را تحویل دهید و دکمه زیر را بزنید.</p>`;
@@ -191,22 +230,26 @@ async function deal(){
  h+='</div>';
  if(B&&d.status=='wait_pay')h+=`<button class="btn bad" data-act=cancel>لغو معامله</button>`;
  if(B&&d.status=='handed')h+=`<button class="btn alt" data-act=confirm>همه‌چیز درست است — آزادسازی پول</button><button class="btn bad" data-act=dispute>شکایت دارم</button>`;
- if(!B&&d.status=='paid')main('آیدی را تحویل دادم',()=>doact('handed'));
  app.innerHTML=h;
- tmr=setInterval(async()=>{try{const n=await api('/deals/'+id);if(n.status!=d.status||n.status=='handed')render()}catch(e){}},8000);
+ if(!B&&d.status=='paid')main('آیدی را تحویل دادم',()=>doact('handed'));
+ /* فقط وقتی وضعیت عوض شد صفحه رفرش شود */
+ tmr=setInterval(async()=>{try{const n=await api('/deals/'+id);if(n.status!=d.status)render()}catch(e){}},8000);
 }
 const doact=a=>act(async()=>{await api('/deals/'+cur.a+'/act',{act:a});hap('success');render()});
 
 document.addEventListener('click',e=>{
- const t=e.target.closest('[data-seg],[data-chip],[data-go],[data-act]');if(!t)return;
- if(t.dataset.seg){S.seg=t.dataset.seg;render()}
- else if(t.dataset.chip){S.chip=t.dataset.chip;document.querySelectorAll('.chip').forEach(c=>c.classList.toggle('on',c.dataset.chip==S.chip));list()}
- else if(t.dataset.go)go(t.dataset.go,t.dataset.a);
- else if(t.dataset.act){const a=t.dataset.act;
+ const t=e.target.closest('[data-seg],[data-chip],[data-go],[data-act],[data-back],[data-retry]');if(!t)return;
+ const d=t.dataset;
+ if(d.back)back();
+ else if(d.retry)render();
+ else if(d.seg){S.seg=d.seg;cur={v:'home'};stack=[];render()}
+ else if(d.chip){S.chip=d.chip;document.querySelectorAll('.chip').forEach(c=>c.classList.toggle('on',c.dataset.chip==S.chip));list()}
+ else if(d.go)go(d.go,d.a);
+ else if(d.act){const a=d.act;
   if(a=='cancel'||a=='dispute'||a=='confirm'){const m={cancel:'معامله لغو شود؟',dispute:'شکایت ثبت شود و پشتیبانی بررسی کند؟',confirm:'مطمئنید؟ بعد از آزادسازی، پول به فروشنده می‌رسد.'}[a];
-   W?W.showConfirm(m,ok=>ok&&doact(a)):confirm(m)&&doact(a)}else doact(a)}
+   confirmx(m,()=>doact(a))}else doact(a)}
 });
-if(W){W.ready();W.expand();theme();W.onEvent('themeChanged',theme);W.BackButton.onClick(back)}
+if(W){try{W.ready();W.expand();theme();W.onEvent('themeChanged',theme);W.BackButton.onClick(back)}catch(e){}}
 if(!W||!W.initData)app.innerHTML='<div class=empty><big>🔐</big>این برنامک فقط از داخل سروش‌پلاس (دکمه منوی بات) باز می‌شود.</div>';else render();
 </script>
 </body>
