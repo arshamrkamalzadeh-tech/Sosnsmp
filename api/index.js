@@ -53,6 +53,7 @@ function debugAuth(init) {
   try {
     const p = new URLSearchParams(init);
     out.keys = [...p.keys()];
+    out.userRaw = (p.get('user') || '').replace(/"id":\d+/, '"id":N').slice(0, 400);
     out.authDateAgeSec = p.get('auth_date') ? now() - Number(p.get('auth_date')) : null;
     const hash = p.get('hash');
     const hx = (k, m) => crypto.createHmac('sha256', k).update(m).digest('hex');
@@ -73,6 +74,32 @@ function debugAuth(init) {
   return out;
 }
 
+/* بررسی امضا؛ چند شکل مختلف نوشتن JSON کاربر (slash و یونی‌کد) هم امتحان می‌شود */
+function userForms(u) {
+  const out = [u];
+  try {
+    const base = JSON.stringify(JSON.parse(u));
+    const esc = x => x.replace(/[\u0080-\uffff]/g, c => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'));
+    const sl = x => x.replace(/\//g, '\\/');
+    out.push(base, sl(base), esc(base), esc(sl(base)), u.replace(/\\\//g, '/'), esc(u), sl(u));
+  } catch (e) {}
+  return [...new Set(out)];
+}
+function sigOk(entries, hash) {
+  const ui = entries.findIndex(e => e[0] === 'user');
+  const forms = ui >= 0 ? userForms(entries[ui][1]) : [null];
+  for (const f of forms) {
+    const ents = entries.map(e => [e[0], e[0] === 'user' && f !== null ? f : e[1]]);
+    const dcs = ents.sort((x, y) => (x[0] < y[0] ? -1 : 1)).map(([k, v]) => k + '=' + v).join('\n');
+    for (const k of [SIGN_KEY, TOKEN]) {
+      const sec = crypto.createHmac('sha256', 'WebAppData').update(k).digest();
+      const h = crypto.createHmac('sha256', sec).update(dcs).digest('hex');
+      if (h.length === hash.length && crypto.timingSafeEqual(Buffer.from(h), Buffer.from(hash))) return true;
+    }
+  }
+  return false;
+}
+
 /* ---------- احراز هویت initData ---------- */
 function auth(req) {
   const init = req.headers['x-init'] || '';
@@ -83,12 +110,7 @@ function auth(req) {
     const hash = p.get('hash');
     if (hash) {
       p.delete('hash');
-      const dcs = [...p.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(([k, v]) => k + '=' + v).join('\n');
-      for (const k of [SIGN_KEY, TOKEN]) {
-        const sec = crypto.createHmac('sha256', 'WebAppData').update(k).digest();
-        const h = crypto.createHmac('sha256', sec).update(dcs).digest('hex');
-        if (h.length === hash.length && crypto.timingSafeEqual(Buffer.from(h), Buffer.from(hash))) { valid = true; break; }
-      }
+      valid = sigOk([...p.entries()], hash);
     }
     if (p.get('user')) user = JSON.parse(p.get('user'));
   } catch (e) {}
@@ -153,7 +175,7 @@ async function route(req, parts) {
     const url = `https://${req.headers.host}/api/webhook/${SECRET}`;
     return { url, result: await tg('setWebhook', { url }) };
   }
-  if (a === 'ping') return { version: 'v4-debug', hasToken: !!TOKEN, hasSecret: !!SECRET, hasAdmin: !!ADMIN, hasRedis: !!(RURL && RTOK) };
+  if (a === 'ping') return { version: 'v5-forms', hasToken: !!TOKEN, hasSecret: !!SECRET, hasAdmin: !!ADMIN, hasRedis: !!(RURL && RTOK) };
   if (a === 'cron') { await sweep(); return { ok: true }; }
 
   const user = auth(req);
