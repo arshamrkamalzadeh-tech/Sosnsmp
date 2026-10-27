@@ -17,7 +17,7 @@ const RURL = E.UPSTASH_REDIS_REST_URL || E.KV_REST_API_URL;
 const RTOK = E.UPSTASH_REDIS_REST_TOKEN || E.KV_REST_API_TOKEN;
 
 const now = () => Math.floor(Date.now() / 1000);
-const err = (status, message) => Object.assign(new Error(message), { status });
+const err = (status, message, code) => Object.assign(new Error(message), { status, code });
 const fa = n => Number(n).toLocaleString('fa-IR');
 
 /* ---------- Redis (REST) ---------- */
@@ -49,33 +49,6 @@ async function tg(method, p) {
 const say = (id, text) => (id ? tg('sendMessage', { chat_id: id, text }) : null);
 const tellAdmin = text => say(ADMIN, text);
 
-/* ---------- عیب‌یابی موقت: فقط با DEBUG_AUTH=1 ---------- */
-function debugAuth(init) {
-  const out = { tokenId: TOKEN.split(':')[0], extraIds: String(E.BOT_TOKEN_2 || '').split(',').map(x => x.trim().split(':')[0]).filter(Boolean), signKeyLen: SIGN_KEY.length, initLen: init.length };
-  try {
-    const p = new URLSearchParams(init);
-    out.keys = [...p.keys()];
-    out.userRaw = (p.get('user') || '').replace(/"id":\d+/, '"id":N').slice(0, 400);
-    out.authDateAgeSec = p.get('auth_date') ? now() - Number(p.get('auth_date')) : null;
-    const hash = p.get('hash');
-    const hx = (k, m) => crypto.createHmac('sha256', k).update(m).digest('hex');
-    const tokens = { signKey: SIGN_KEY, full: TOKEN, beforeColon: TOKEN.split(':')[0] };
-    const dcsOf = (sep, raw) => {
-      const ents = raw ? init.split('&').map(x => { const i = x.indexOf('='); return [x.slice(0, i), x.slice(i + 1)]; }) : [...new URLSearchParams(init).entries()];
-      return ents.filter(([k]) => k !== 'hash').sort((x, y) => (x[0] < y[0] ? -1 : 1)).map(([k, v]) => k + '=' + v).join(sep);
-    };
-    const tries = [];
-    for (const [tn, tk] of Object.entries(tokens)) {
-      const secrets = { 'WebAppData-key': crypto.createHmac('sha256', 'WebAppData').update(tk).digest(), 'swapped': crypto.createHmac('sha256', tk).update('WebAppData').digest(), 'sha256': crypto.createHash('sha256').update(tk).digest(), 'raw': Buffer.from(tk) };
-      for (const [sn, sec] of Object.entries(secrets)) for (const raw of [false, true]) for (const sep of ['\n', '&']) {
-        if (hx(sec, dcsOf(sep, raw)) === hash) tries.push(`${tn}|${sn}|raw=${raw}|sep=${JSON.stringify(sep)}`);
-      }
-    }
-    out.matched = tries.length ? tries : 'NONE';
-  } catch (e) { out.error = String(e.message) }
-  return out;
-}
-
 /* بررسی امضا؛ چند شکل مختلف نوشتن JSON کاربر (slash و یونی‌کد) هم امتحان می‌شود */
 function userForms(u) {
   const out = [u];
@@ -102,31 +75,41 @@ function sigOk(entries, hash) {
   return false;
 }
 
-/* ---------- احراز هویت initData ---------- */
-function auth(req) {
+/* ---------- احراز هویت ----------
+   راه ۱: initData امضاشدهٔ سروش‌پلاس (اگر معتبر بود)
+   راه ۲: نشست (session) که با ارسال کد به بات ساخته شده؛ به امضای سروش‌پلاس وابسته نیست */
+const sha = x => crypto.createHash('sha256').update(String(x)).digest('hex');
+const SESS_TTL = 30 * 86400;
+const CODE_ABC = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const newLoginCode = () => Array.from({ length: 8 }, () => CODE_ABC[crypto.randomInt(CODE_ABC.length)]).join('');
+
+function initAuth(req) {
   const init = req.headers['x-init'] || '';
-  if (!init) throw err(401, 'ورود نامعتبر: برنامک را از داخل سروش‌پلاس باز کنید');
-  let user = null, valid = false;
+  if (!init) return null;
   try {
     const p = new URLSearchParams(init);
     const hash = p.get('hash');
+    let ok = false;
     if (hash) {
       p.delete('hash');
-      valid = sigOk([...p.entries()], hash);
+      ok = sigOk([...p.entries()], hash);
     }
-    if (p.get('user')) user = JSON.parse(p.get('user'));
-  } catch (e) {}
-  if (!valid) {
-    /* فقط برای تست: TRUST_INITDATA=1 — بعد از تست حتماً حذف کنید! */
-    if (E.TRUST_INITDATA === '1') {
-      if (!user) { try { const j = JSON.parse(init); user = j.user || j; } catch (e) {} }
-    } else {
-      if (E.DEBUG_AUTH === '1') throw err(401, 'DEBUG: ' + JSON.stringify(debugAuth(init)));
-      throw err(401, 'اعتبارسنجی initData ناموفق بود (توکن بات یا فرمت initData را بررسی کنید)');
-    }
-  }
-  if (!user || !user.id) throw err(401, 'کاربر شناسایی نشد');
-  return { id: String(user.id), username: String(user.username || '').toLowerCase() };
+    if (!ok && E.TRUST_INITDATA !== '1') return null;   /* TRUST_INITDATA فقط برای تست */
+    const u = p.get('user') ? JSON.parse(p.get('user')) : null;
+    if (!u || !u.id) return null;
+    return { id: String(u.id), username: String(u.username || '').toLowerCase() };
+  } catch (e) { return null; }
+}
+async function sessAuth(req) {
+  const sid = String(req.headers['x-sess'] || '');
+  if (!/^[a-f0-9]{48}$/.test(sid)) return null;
+  const r = await getj('sess:' + sha(sid));
+  return r && r.id ? { id: String(r.id), username: String(r.username || '').toLowerCase() } : null;
+}
+async function auth(req) {
+  const u = initAuth(req) || (await sessAuth(req));
+  if (!u) throw err(401, 'برای ورود، کد را برای بات بفرستید', 'login');
+  return u;
 }
 
 /* ---------- کمکی‌ها ---------- */
@@ -165,7 +148,7 @@ module.exports = async (req, res) => {
     const out = await route(req, parts);
     res.status(200).json(out ?? { ok: true });
   } catch (e) {
-    res.status(e.status || 500).json({ error: e.status ? e.message : 'خطای داخلی سرور: ' + e.message });
+    res.status(e.status || 500).json({ error: e.status ? e.message : 'خطای داخلی سرور: ' + e.message, code: e.code });
   }
 };
 
@@ -177,10 +160,26 @@ async function route(req, parts) {
     const url = `https://${req.headers.host}/api/webhook/${SECRET}`;
     return { url, result: await tg('setWebhook', { url }) };
   }
-  if (a === 'ping') return { version: 'v6-multi', hasToken: !!TOKEN, hasSecret: !!SECRET, hasAdmin: !!ADMIN, hasRedis: !!(RURL && RTOK) };
+  if (a === 'ping') return { version: 'v7-login', hasToken: !!TOKEN, hasSecret: !!SECRET, hasAdmin: !!ADMIN, hasRedis: !!(RURL && RTOK) };
   if (a === 'cron') { await sweep(); return { ok: true }; }
 
-  const user = auth(req);
+  /* --- ورود با کد داخل چت بات (بدون نیاز به امضای initData) --- */
+  if (a === 'login' && b === 'start' && M === 'POST') {
+    const ip = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() || 'x';
+    const n = await R('INCR', 'rl:' + ip);
+    if (n === 1) await R('EXPIRE', 'rl:' + ip, 60);
+    if (n > 12) throw err(429, 'تعداد درخواست زیاد است؛ کمی بعد تلاش کنید');
+    const code = newLoginCode(), sid = crypto.randomBytes(24).toString('hex');
+    await setj('lgc:' + code, { h: sha(sid) }, 600);
+    return { code, sid, ttl: 600, bot: BOTU };
+  }
+  if (a === 'login' && b === 'status' && M === 'GET') {
+    const sid = String(req.headers['x-sess'] || '');
+    if (!/^[a-f0-9]{48}$/.test(sid)) return { state: 'wait' };
+    return { state: (await getj('sess:' + sha(sid))) ? 'ok' : 'wait' };
+  }
+
+  const user = await auth(req);
 
   /* --- لیست آگهی‌ها --- */
   if (a === 'listings' && M === 'GET') {
@@ -314,6 +313,16 @@ async function webhook(req, key) {
   /* /start */
   if (text.startsWith('/start')) {
     await say(chat, `سلام 👋\nبرای خرید و فروش آیدی، دکمهٔ منوی بات را بزنید.\nاگر در حال ثبت آگهی هستید، کد ۴ رقمی را همین‌جا بفرستید.\n\nشناسهٔ عددی شما: ${fid}`);
+    return { ok: true };
+  }
+
+  /* کد ورود به برنامک (۸ حرف/عدد) */
+  if (/^[A-HJ-NP-Z2-9]{8}$/.test(text.toUpperCase())) {
+    const c = text.toUpperCase(), L = await getj('lgc:' + c);
+    if (!L) { await say(chat, 'این کد ورود معتبر نیست یا منقضی شده. از برنامک دوباره «کد ورود» بگیرید.'); return { ok: true }; }
+    await setj('sess:' + L.h, { id: fid, username: uname }, SESS_TTL);
+    await R('DEL', 'lgc:' + c);
+    await say(chat, '✅ وارد شدید. به برنامک برگردید.\nاگر خودتان این کد را درخواست نکرده‌اید، هرگز آن را برای کسی نفرستید.');
     return { ok: true };
   }
 
