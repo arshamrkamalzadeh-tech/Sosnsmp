@@ -58,9 +58,11 @@ function auth(req) {
     if (hash) {
       p.delete('hash');
       const dcs = [...p.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(([k, v]) => k + '=' + v).join('\n');
-      const sec = crypto.createHmac('sha256', 'WebAppData').update(SIGN_KEY).digest();
-      const h = crypto.createHmac('sha256', sec).update(dcs).digest('hex');
-      valid = h.length === hash.length && crypto.timingSafeEqual(Buffer.from(h), Buffer.from(hash));
+      for (const k of [SIGN_KEY, TOKEN]) {
+        const sec = crypto.createHmac('sha256', 'WebAppData').update(k).digest();
+        const h = crypto.createHmac('sha256', sec).update(dcs).digest('hex');
+        if (h.length === hash.length && crypto.timingSafeEqual(Buffer.from(h), Buffer.from(hash))) { valid = true; break; }
+      }
     }
     if (p.get('user')) user = JSON.parse(p.get('user'));
   } catch (e) {}
@@ -122,6 +124,7 @@ async function route(req, parts) {
     const url = `https://${req.headers.host}/api/webhook/${SECRET}`;
     return { url, result: await tg('setWebhook', { url }) };
   }
+  if (a === 'ping') return { version: 'v3-signkey', hasToken: !!TOKEN, hasSecret: !!SECRET, hasAdmin: !!ADMIN, hasRedis: !!(RURL && RTOK) };
   if (a === 'cron') { await sweep(); return { ok: true }; }
 
   const user = auth(req);
@@ -295,5 +298,4 @@ async function webhook(req, key) {
 
   await say(chat, 'برای استفاده از بازارچه دکمهٔ منوی بات را بزنید.');
   return { ok: true };
-  }
-      
+      }
