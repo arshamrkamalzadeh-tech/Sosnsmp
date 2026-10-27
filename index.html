@@ -79,7 +79,8 @@ const short=n=>n>=1e6?fa(+(n/1e6).toFixed(1))+' م':n>=1e3?fa(Math.round(n/1e3))
 /* تبدیل ارقام فارسی/عربی به انگلیسی */
 const en=s=>String(s??'').replace(/[۰-۹]/g,d=>'۰۱۲۳۴۵۶۷۸۹'.indexOf(d)).replace(/[٠-٩]/g,d=>'٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[,،٬\s]/g,'');
 const ST={wait_pay:['در انتظار پرداخت',0],receipt:['رسید دریافت شد؛ در انتظار تأیید',0],paid:['پرداخت شد؛ منتظر تحویل',1],handed:['تحویل شد؛ قفل زمانی',2],dispute:['در بررسی پشتیبانی',2],due:['در حال واریز',3],done:['تکمیل شد',4],cancel:['لغو شد',-1]};
-let stack=[],cur={v:'home'},tmr=null,pol=null;
+let stack=[],cur={v:'home'},tmr=null,pol=null,PENDING='';
+const store={get(k){try{return localStorage.getItem(k)||''}catch(e){return ''}},set(k,v){try{localStorage.setItem(k,v)}catch(e){}},del(k){try{localStorage.removeItem(k)}catch(e){}}};
 const S={seg:'market',q:'',chip:'all',sort:'new',data:null};
 
 function theme(){const t=(W&&W.themeParams)||{};
@@ -92,12 +93,12 @@ async function api(p,body){
  let r;
  try{
   r=await fetch('/api'+p,{method:body?'POST':'GET',signal:ctl.signal,
-   headers:{'X-Init':(W&&W.initData)||'','Content-Type':'application/json'},
+   headers:{'X-Init':(W&&W.initData)||'','X-Sess':PENDING||store.get('sess'),'Content-Type':'application/json'},
    body:body?JSON.stringify(body):undefined});
  }catch(e){clearTimeout(to);throw new Error(e.name=='AbortError'?'سرور دیر پاسخ داد. دوباره تلاش کنید':'اتصال به سرور برقرار نشد (آدرس /api یا اینترنت را بررسی کنید)')}
  clearTimeout(to);
  const txt=await r.text();let j={};try{j=JSON.parse(txt)}catch(e){}
- if(!r.ok)throw new Error(j.error||('خطای سرور ('+r.status+')'));
+ if(!r.ok){const er=new Error(j.error||('خطای سرور ('+r.status+')'));er.code=j.code;throw er}
  if(!txt||j===null||typeof j!=='object')throw new Error('پاسخ نامعتبر از سرور (احتمالاً مسیر /api تنظیم نیست)');
  return j}
 const hap=t=>{try{W&&W.HapticFeedback&&W.HapticFeedback.notificationOccurred(t)}catch(e){}};
@@ -123,8 +124,9 @@ async function render(){
  main('');
  try{const bb=W&&W.BackButton;if(bb){stack.length?bb.show():bb.hide()}}catch(e){}
  window.scrollTo(0,0);
- const f={home,sell,code,detail,deals,deal}[cur.v];
+ const f={home,sell,code,detail,deals,deal,login}[cur.v];
  try{await f()}catch(e){
+  if(e.code=='login'&&cur.v!='login'){store.del('sess');cur={v:'login'};stack=[];return render()}
   hap('error');
   app.innerHTML=backBar()+`<div class=empty><big>⚠️</big>${esc(e.message||'خطا')}<br><br><button class="btn alt" data-retry=1>تلاش دوباره</button></div>`}
 }
@@ -217,6 +219,20 @@ function code(){
    if(s.state=='fail'||s.state=='expired'){stop();hap('error');draw('❌ '+(s.why||'کد منقضی شد')+' — دوباره تلاش کنید')}
   }catch(e){}finally{busy=false}},3000);
 }
+/* ---------- ورود با کد داخل چت بات ---------- */
+async function login(){
+ app.innerHTML='<div class=empty><big>🔐</big>در حال ساخت کد ورود…</div>';
+ const r=await api('/login/start',{});
+ PENDING=r.sid;let left=r.ttl,fin=false,busy=false;
+ const draw=m=>app.innerHTML=`<h2>ورود به بازارچه</h2><div class=panel><div class=code style="font-size:34px;letter-spacing:6px">${esc(r.code)}</div><p class=hint style="text-align:center">این کد را دقیقاً برای @${esc(r.bot)} در چت بفرستید.<br>پس از ارسال، خودکار وارد می‌شوید.</p></div><p id=lt style="text-align:center">${m||'⏳ '+Math.floor(left/60)+':'+String(left%60).padStart(2,'0')}</p><button class="btn alt" data-retry=1>کد جدید</button><p class=hint style="text-align:center;margin-top:12px">کد را فقط خودتان از همین صفحه بفرستید؛ اگر کسی برایتان کد فرستاد، هرگز آن را نفرستید.</p>`;
+ draw();
+ const stop=()=>{fin=true;clearInterval(tmr);clearInterval(pol);tmr=pol=null};
+ tmr=setInterval(()=>{if(fin)return;left--;if(left<=0){stop();PENDING='';draw('❌ کد منقضی شد');return}const p=$('#lt');if(p)p.textContent='⏳ '+Math.floor(left/60)+':'+String(left%60).padStart(2,'0')},1000);
+ pol=setInterval(async()=>{if(busy||fin)return;busy=true;
+  try{const s=await api('/login/status');if(fin)return;
+   if(s.state=='ok'){stop();store.set('sess',PENDING);PENDING='';hap('success');cur={v:'home'};stack=[];render()}
+  }catch(e){}finally{busy=false}},2500);
+}
 function deals(){S.seg='deals';stack=[];cur={v:'home'};return render()}
 
 /* ---------- معامله ---------- */
@@ -251,7 +267,7 @@ document.addEventListener('click',e=>{
    confirmx(m,()=>doact(a))}else doact(a)}
 });
 if(W){try{W.ready();W.expand();theme();W.onEvent('themeChanged',theme);W.BackButton.onClick(back)}catch(e){}}
-if(!W||!W.initData)app.innerHTML='<div class=empty><big>🔐</big>این برنامک فقط از داخل سروش‌پلاس (دکمه منوی بات) باز می‌شود.</div>';else render();
+if(!W)app.innerHTML='<div class=empty><big>🔐</big>این برنامک فقط از داخل سروش‌پلاس (دکمه منوی بات) باز می‌شود.</div>';else render();
 </script>
 </body>
 </html>
