@@ -53,16 +53,26 @@ function debugAuth(init) {
     out.keys = [...p.keys()];
     const hash = p.get('hash'); out.hasHash = !!hash;
     const T = TOKEN.trim();
-    const tokens = { token: T, noBotPrefix: T.replace(/^bot/i, ''), afterColon: T.split(':').pop() };
+    const tokens = { token: T, noBotPrefix: T.replace(/^bot/i, ''), afterColon: T.split(':').pop(), beforeColon: T.split(':')[0] };
     const tries = [];
+    const hx = (k, m) => crypto.createHmac('sha256', k).update(m).digest('hex');
+    const dcsOf = (sep, dropKeys, raw) => {
+      let ents;
+      if (raw) ents = init.split('&').map(x => { const i = x.indexOf('='); return [x.slice(0, i), x.slice(i + 1)]; });
+      else ents = [...new URLSearchParams(init).entries()];
+      return ents.filter(([k]) => k !== 'hash' && !dropKeys.includes(k)).sort((x, y) => (x[0] < y[0] ? -1 : 1)).map(([k, v]) => k + '=' + v).join(sep);
+    };
     for (const [tn, tk] of Object.entries(tokens)) {
-      for (const dropSig of [false, true]) {
-        const q = new URLSearchParams(init); q.delete('hash'); if (dropSig) q.delete('signature');
-        const dcs = [...q.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(([k, v]) => k + '=' + v).join('\n');
-        const sec1 = crypto.createHmac('sha256', 'WebAppData').update(tk).digest();
-        const sec2 = crypto.createHmac('sha256', tk).update('WebAppData').digest();
-        if (crypto.createHmac('sha256', sec1).update(dcs).digest('hex') === hash) tries.push(`OK: ${tn}, key=WebAppData, dropSignature=${dropSig}`);
-        if (crypto.createHmac('sha256', sec2).update(dcs).digest('hex') === hash) tries.push(`OK: ${tn}, key=token(swapped), dropSignature=${dropSig}`);
+      const secrets = {
+        'key=WebAppData,msg=token': crypto.createHmac('sha256', 'WebAppData').update(tk).digest(),
+        'key=token,msg=WebAppData': crypto.createHmac('sha256', tk).update('WebAppData').digest(),
+        'sha256(token)': crypto.createHash('sha256').update(tk).digest(),
+        'token-raw': Buffer.from(tk)
+      };
+      for (const [sn, sec] of Object.entries(secrets)) {
+        for (const raw of [false, true]) for (const sep of ['\n', '&']) for (const drop of [[], ['signature']]) {
+          if (hx(sec, dcsOf(sep, drop, raw)) === hash) tries.push(`OK: ${tn} | ${sn} | raw=${raw} | sep=${JSON.stringify(sep)} | drop=${drop}`);
+        }
       }
     }
     out.matched = tries.length ? tries : 'هیچ حالتی نخورد';
@@ -321,4 +331,5 @@ async function webhook(req, key) {
 
   await say(chat, 'برای استفاده از بازارچه دکمهٔ منوی بات را بزنید.');
   return { ok: true };
-}
+    }
+        
