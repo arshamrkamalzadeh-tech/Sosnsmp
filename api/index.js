@@ -47,6 +47,32 @@ async function tg(method, p) {
 const say = (id, text) => (id ? tg('sendMessage', { chat_id: id, text }) : null);
 const tellAdmin = text => say(ADMIN, text);
 
+/* ---------- عیب‌یابی موقت: فقط با DEBUG_AUTH=1 ---------- */
+function debugAuth(init) {
+  const out = { tokenId: TOKEN.split(':')[0], signKeyLen: SIGN_KEY.length, initLen: init.length };
+  try {
+    const p = new URLSearchParams(init);
+    out.keys = [...p.keys()];
+    out.authDateAgeSec = p.get('auth_date') ? now() - Number(p.get('auth_date')) : null;
+    const hash = p.get('hash');
+    const hx = (k, m) => crypto.createHmac('sha256', k).update(m).digest('hex');
+    const tokens = { signKey: SIGN_KEY, full: TOKEN, beforeColon: TOKEN.split(':')[0] };
+    const dcsOf = (sep, raw) => {
+      const ents = raw ? init.split('&').map(x => { const i = x.indexOf('='); return [x.slice(0, i), x.slice(i + 1)]; }) : [...new URLSearchParams(init).entries()];
+      return ents.filter(([k]) => k !== 'hash').sort((x, y) => (x[0] < y[0] ? -1 : 1)).map(([k, v]) => k + '=' + v).join(sep);
+    };
+    const tries = [];
+    for (const [tn, tk] of Object.entries(tokens)) {
+      const secrets = { 'WebAppData-key': crypto.createHmac('sha256', 'WebAppData').update(tk).digest(), 'swapped': crypto.createHmac('sha256', tk).update('WebAppData').digest(), 'sha256': crypto.createHash('sha256').update(tk).digest(), 'raw': Buffer.from(tk) };
+      for (const [sn, sec] of Object.entries(secrets)) for (const raw of [false, true]) for (const sep of ['\n', '&']) {
+        if (hx(sec, dcsOf(sep, raw)) === hash) tries.push(`${tn}|${sn}|raw=${raw}|sep=${JSON.stringify(sep)}`);
+      }
+    }
+    out.matched = tries.length ? tries : 'NONE';
+  } catch (e) { out.error = String(e.message) }
+  return out;
+}
+
 /* ---------- احراز هویت initData ---------- */
 function auth(req) {
   const init = req.headers['x-init'] || '';
@@ -70,7 +96,10 @@ function auth(req) {
     /* فقط برای تست: TRUST_INITDATA=1 — بعد از تست حتماً حذف کنید! */
     if (E.TRUST_INITDATA === '1') {
       if (!user) { try { const j = JSON.parse(init); user = j.user || j; } catch (e) {} }
-    } else throw err(401, 'اعتبارسنجی initData ناموفق بود (توکن بات یا فرمت initData را بررسی کنید)');
+    } else {
+      if (E.DEBUG_AUTH === '1') throw err(401, 'DEBUG: ' + JSON.stringify(debugAuth(init)));
+      throw err(401, 'اعتبارسنجی initData ناموفق بود (توکن بات یا فرمت initData را بررسی کنید)');
+    }
   }
   if (!user || !user.id) throw err(401, 'کاربر شناسایی نشد');
   return { id: String(user.id), username: String(user.username || '').toLowerCase() };
@@ -124,7 +153,7 @@ async function route(req, parts) {
     const url = `https://${req.headers.host}/api/webhook/${SECRET}`;
     return { url, result: await tg('setWebhook', { url }) };
   }
-  if (a === 'ping') return { version: 'v3-signkey', hasToken: !!TOKEN, hasSecret: !!SECRET, hasAdmin: !!ADMIN, hasRedis: !!(RURL && RTOK) };
+  if (a === 'ping') return { version: 'v4-debug', hasToken: !!TOKEN, hasSecret: !!SECRET, hasAdmin: !!ADMIN, hasRedis: !!(RURL && RTOK) };
   if (a === 'cron') { await sweep(); return { ok: true }; }
 
   const user = auth(req);
@@ -298,4 +327,4 @@ async function webhook(req, key) {
 
   await say(chat, 'برای استفاده از بازارچه دکمهٔ منوی بات را بزنید.');
   return { ok: true };
-      }
+}
