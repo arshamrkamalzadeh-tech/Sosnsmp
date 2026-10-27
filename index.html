@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<script src="https://app.splus.ir/js/soroush-web-app.js"></script>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>بازارچه امن آیدی</title>
+<style>
+:root{--bg:#0b0c10;--tx:#f4f5f8;--hint:#8a8d9a;--btn:#3b82f6;--btx:#fff;--card:#15171d;--line:#23262f;--ok:#22c55e;--bad:#ef4444;--g1:#3b82f6;--g2:#8b5cf6;--gold:#f5b942}
+@media(prefers-color-scheme:light){:root{--bg:#f5f6fa;--tx:#111;--hint:#70747f;--card:#fff;--line:#e6e8ef}}
+*{box-sizing:border-box;margin:0;-webkit-tap-highlight-color:transparent}
+body{background:var(--bg);color:var(--tx);font:15px/1.7 system-ui,Tahoma,sans-serif;padding:0 14px 110px;min-height:100vh}
+body:before{content:"";position:fixed;inset:-30% -20% auto -20%;height:340px;background:radial-gradient(closest-side,rgba(139,92,246,.28),transparent);pointer-events:none;z-index:0}
+#app,#fb{position:relative;z-index:1}
+.hero{padding:18px 0 6px;display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.hero h1{font-size:23px;line-height:1.3;font-weight:800}
+.hero h1 b{background:linear-gradient(90deg,var(--g1),var(--g2));-webkit-background-clip:text;background-clip:text;color:transparent}
+.hero p{color:var(--hint);font-size:13px}
+.sellbtn{border:1px solid var(--line);background:var(--card);color:var(--tx);border-radius:12px;padding:8px 12px;font:inherit;font-size:13px;font-weight:700;white-space:nowrap}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px 6px;text-align:center}
+.stat b{display:block;font-size:16px}.stat span{font-size:11px;color:var(--hint)}
+.search{position:relative;margin:6px 0 10px}
+.search input{width:100%;padding:13px 44px 13px 14px;border-radius:14px;border:1px solid var(--line);background:var(--card);color:var(--tx);font:inherit;direction:ltr;text-align:left;outline:0}
+.search input:focus{border-color:var(--g1)}
+.search:before{content:"🔍";position:absolute;right:14px;top:50%;transform:translateY(-50%);font-size:15px;opacity:.7}
+.chips{display:flex;gap:7px;overflow-x:auto;padding:2px 0 10px;scrollbar-width:none}.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;padding:7px 13px;border-radius:99px;border:1px solid var(--line);background:var(--card);color:var(--hint);font:inherit;font-size:13px}
+.chip.on{background:linear-gradient(90deg,var(--g1),var(--g2));border-color:transparent;color:#fff}
+.seg{display:flex;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:4px;margin-bottom:10px}
+.seg button{flex:1;padding:8px 4px;border:0;border-radius:10px;background:none;color:var(--hint);font:inherit;font-size:13px;font-weight:700}
+.seg .on{background:var(--line);color:var(--tx)}
+.meta{display:flex;justify-content:space-between;align-items:center;color:var(--hint);font-size:12px;margin:2px 2px 8px}
+.meta select{background:none;border:0;color:var(--tx);font:inherit;font-size:12px;outline:0}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.u{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:13px 12px;position:relative;overflow:hidden;transition:transform .12s,border-color .12s}
+.u:active{transform:scale(.97);border-color:var(--g2)}
+.u .nm{font-size:19px;font-weight:800;direction:ltr;text-align:left;word-break:break-all;line-height:1.25}
+.u .nm i{color:var(--g1);font-style:normal;opacity:.85}
+.u .pr{margin-top:8px;font-weight:800;color:var(--gold);font-size:14px}
+.u .pr small{color:var(--hint);font-weight:400;font-size:11px}
+.u .bd{display:flex;gap:5px;margin-top:6px;flex-wrap:wrap}
+.b{font-size:10.5px;padding:1px 7px;border-radius:99px;background:rgba(59,130,246,.15);color:var(--g1)}
+.b.ok{background:rgba(34,197,94,.14);color:var(--ok)}.b.gold{background:rgba(245,185,66,.15);color:var(--gold)}.b.me{background:rgba(139,92,246,.18);color:var(--g2)}
+.u.sold{opacity:.75}.u.sold .nm{text-decoration:line-through;text-decoration-color:var(--hint)}
+.u.sold:after{content:"فروخته شد";position:absolute;left:8px;top:8px;font-size:10px;color:var(--ok);border:1px solid var(--ok);border-radius:6px;padding:0 5px}
+.sk{height:96px;border-radius:16px;background:linear-gradient(90deg,var(--card) 25%,var(--line) 50%,var(--card) 75%);background-size:200% 100%;animation:sh 1.2s infinite}
+@keyframes sh{to{background-position:-200% 0}}
+.empty{text-align:center;color:var(--hint);padding:48px 10px;grid-column:1/-1}
+.empty big{display:block;font-size:38px;margin-bottom:6px}
+h2{font-size:18px;margin:10px 0 12px}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:12px}
+.big{font-size:30px;font-weight:800;direction:ltr;text-align:left;word-break:break-all;line-height:1.2}
+.big i{color:var(--g1);font-style:normal}
+.row{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.price{color:var(--gold);font-weight:800}.hint{color:var(--hint);font-size:13px}
+.tag{font-size:12px;padding:2px 9px;border-radius:99px;background:var(--btn);color:var(--btx)}
+input.f,textarea.f{width:100%;padding:13px;border-radius:14px;border:1px solid var(--line);background:var(--card);color:var(--tx);font:inherit;margin-bottom:10px;outline:0}
+input.f:focus,textarea.f:focus{border-color:var(--g1)}
+.btn{width:100%;padding:14px;border:0;border-radius:14px;background:linear-gradient(90deg,var(--g1),var(--g2));color:#fff;font:inherit;font-weight:800;margin-top:8px}
+.btn.alt{background:var(--card);border:1px solid var(--line);color:var(--tx)}.btn.bad{background:var(--bad)}
+#fb{position:fixed;inset:auto 14px 14px}
+.code{font:800 46px/1.2 monospace;letter-spacing:10px;text-align:center;padding:16px 0;direction:ltr;background:linear-gradient(90deg,var(--g1),var(--g2));-webkit-background-clip:text;background-clip:text;color:transparent}
+.steps{display:flex;gap:4px;margin:12px 0}.steps i{flex:1;height:5px;border-radius:9px;background:var(--hint);opacity:.3}.steps i.on{background:var(--ok);opacity:1}
+.trust{display:flex;gap:10px;align-items:flex-start;font-size:13px;color:var(--hint)}.trust b{color:var(--tx)}
+.fee{display:flex;justify-content:space-between;font-size:13px;color:var(--hint);padding:3px 0}
+</style>
+</head>
+<body>
+<div id="app"></div><div id="fb"></div>
+<script>
+const W=window.Soroush&&Soroush.WebApp, $=s=>document.querySelector(s), app=$('#app');
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fa=n=>Number(n).toLocaleString('fa-IR');
+const short=n=>n>=1e6?fa(+(n/1e6).toFixed(1))+' م':n>=1e3?fa(Math.round(n/1e3))+' هزار':fa(n);
+const ST={wait_pay:['در انتظار پرداخت',0],paid:['پرداخت شد؛ منتظر تحویل',1],handed:['تحویل شد؛ قفل زمانی',2],dispute:['در بررسی پشتیبانی',2],due:['در حال واریز',3],done:['تکمیل شد',4],cancel:['لغو شد',-1]};
+let stack=[],cur={v:'home'},tmr=null,mainFn=null;
+const S={seg:'market',q:'',chip:'all',sort:'new',data:null};
+
+function theme(){const t=W&&W.themeParams||{};
+ if(t.bg_color)document.documentElement.style.setProperty('--bg',t.bg_color);
+ if(t.button_color){document.documentElement.style.setProperty('--btn',t.button_color)}}
+async function api(p,body){
+ const r=await fetch('/api'+p,{method:body?'POST':'GET',headers:{'X-Init':W?W.initData:'','Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});
+ const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||'خطای شبکه');return j}
+const hap=t=>W&&W.HapticFeedback&&W.HapticFeedback.notificationOccurred(t);
+const alertx=m=>W?W.showAlert(m):alert(m);
+function main(t,fn){
+ const B=W&&(W.MainButton||W.BottomButton);
+ if(!B){$('#fb').innerHTML=t?'<button class=btn id=fbb>'+t+'</button>':'';if(t)$('#fbb').onclick=fn;return}
+ if(mainFn)B.offClick(mainFn);mainFn=fn;
+ if(!t){B.hide();return}B.setText(t);B.onClick(fn);B.show()}
+function go(v,a){stack.push(cur);cur={v,a};render()}
+function back(){if(tmr)clearInterval(tmr);cur=stack.pop()||{v:'home'};render()}
+async function act(fn){try{await fn()}catch(e){hap('error');alertx(e.message)}}
+
+async function render(){
+ if(tmr){clearInterval(tmr);tmr=null}main('');
+ const bb=W&&W.BackButton;if(bb){stack.length?bb.show():bb.hide()}
+ window.scrollTo(0,0);
+ await act(()=>({home,sell,code,detail,deals,deal}[cur.v]()));
+}
+
+/* ---------- خانه: اول بازار ---------- */
+const CHIPS=[['all','همه'],['l3','۳ حرفی'],['l4','۴ حرفی'],['l5','۵ حرفی'],['l6','۶+'],['alpha','فقط حروف'],['num','دارای عدد'],['ok','فروشنده باتجربه'],['u1','زیر ۱ میلیون'],['u5','زیر ۵ میلیون']];
+function pass(l){
+ const n=l.uname,c=S.chip;
+ if(S.q&&!n.includes(S.q.toLowerCase().replace(/^@/,'')))return false;
+ if(c=='l3')return n.length==3; if(c=='l4')return n.length==4; if(c=='l5')return n.length==5; if(c=='l6')return n.length>=6;
+ if(c=='alpha')return /^[a-z]+$/.test(n); if(c=='num')return /\d/.test(n);
+ if(c=='ok')return (l.done||0)>0; if(c=='u1')return l.price<1e6; if(c=='u5')return l.price<5e6;
+ return true}
+function sorted(a){const r=[...a];
+ if(S.sort=='low')r.sort((x,y)=>x.price-y.price);
+ else if(S.sort=='high')r.sort((x,y)=>y.price-x.price);
+ else if(S.sort=='len')r.sort((x,y)=>x.uname.length-y.uname.length||x.price-y.price);
+ return r}
+function card(l){
+ const b=[];
+ if(l.uname.length<=4)b.push('<span class="b gold">کوتاه</span>');
+ if((l.done||0)>0)b.push(`<span class="b ok">✓ ${fa(l.done)} فروش</span>`);
+ if(l.mine)b.push('<span class="b me">آگهی شما</span>');
+ return `<div class=u data-go=detail data-a=${l.id}><div class=nm><i>@</i>${esc(l.uname)}</div><div class=pr>${fa(l.price)} <small>تومان</small></div><div class=bd>${b.join('')}</div></div>`}
+function soldCard(l){return `<div class="u sold"><div class=nm><i>@</i>${esc(l.uname)}</div><div class=pr>${fa(l.price)} <small>تومان</small></div></div>`}
+function list(){
+ const D=S.data,el=$('#list');if(!el||!D)return;
+ let items=S.seg=='sold'?D.sold:sorted(D.items.filter(pass));
+ $('#cnt').textContent=fa(items.length)+(S.seg=='sold'?' فروش اخیر':' آیدی');
+ el.innerHTML=items.length?items.map(S.seg=='sold'?soldCard:card).join(''):
+  `<div class=empty><big>${S.seg=='sold'?'🕓':'🔎'}</big>${S.seg=='sold'?'هنوز فروشی ثبت نشده':'آیدی با این مشخصات پیدا نشد'}<br><span class=hint>می‌توانید خودتان آیدی آگهی کنید</span></div>`}
+async function home(){
+ app.innerHTML=`<div class=hero><div><h1>بازارچه <b>آیدی</b></h1><p>خرید و فروش امن با امانت‌داری</p></div><button class=sellbtn data-go=sell>＋ آگهی فروش</button></div>
+ <div class=stats><div class=stat><b id=s1>—</b><span>آیدی فعال</span></div><div class=stat><b id=s2>—</b><span>فروش موفق</span></div><div class=stat><b id=s3>—</b><span>حجم معاملات</span></div></div>
+ <div class=search><input id=sq dir=ltr placeholder="جستجوی آیدی…" value="${esc(S.q)}" autocomplete=off autocapitalize=off></div>
+ <div class=seg><button data-seg=market class="${S.seg=='market'?'on':''}">بازار</button><button data-seg=sold class="${S.seg=='sold'?'on':''}">فروخته‌شده‌ها</button><button data-seg=deals class="${S.seg=='deals'?'on':''}">معاملات من</button></div>
+ <div id=body></div>`;
+ $('#sq').oninput=e=>{S.q=e.target.value.trim();list()};
+ if(S.seg=='deals')return dealsTab();
+ $('#body').innerHTML=(S.seg=='market'?`<div class=chips>${CHIPS.map(c=>`<button class="chip ${S.chip==c[0]?'on':''}" data-chip=${c[0]}>${c[1]}</button>`).join('')}</div>`:'')+
+  `<div class=meta><span id=cnt></span>${S.seg=='market'?`<select id=so><option value=new>جدیدترین</option><option value=low>ارزان‌ترین</option><option value=high>گران‌ترین</option><option value=len>کوتاه‌ترین</option></select>`:''}</div><div class=grid id=list>${'<div class=sk></div>'.repeat(6)}</div>`;
+ if($('#so')){$('#so').value=S.sort;$('#so').onchange=e=>{S.sort=e.target.value;list()}}
+ const D=S.data=await api('/listings');
+ $('#s1').textContent=fa(D.stats.active);$('#s2').textContent=fa(D.stats.sold);$('#s3').textContent=short(D.stats.volume);
+ window._L=D.items;list();
+}
+async function dealsTab(){
+ $('.search').style.display='none';
+ $('#body').innerHTML='<div class=grid id=list style="grid-template-columns:1fr">'+'<div class=sk></div>'.repeat(3)+'</div>';
+ const{items}=await api('/deals');
+ $('#list').innerHTML=items.length?items.map(d=>`<div class=u data-go=deal data-a=${d.id}><div class=row><span class=nm style="font-size:17px"><i>@</i>${esc(d.uname)}</span><span class=tag>${d.role=='buyer'?'خرید':'فروش'}</span></div><div class=row style="margin-top:6px"><span class=hint>${ST[d.status][0]}</span><span class=price>${fa(d.price)} تومان</span></div></div>`).join(''):'<div class=empty><big>🤝</big>هنوز معامله‌ای ندارید</div>';
+}
+
+/* ---------- جزئیات آگهی ---------- */
+function detail(){
+ const l=(window._L||[]).find(x=>x.id==cur.a);if(!l)return back();
+ const fee=Math.round(l.price*0.05);
+ app.innerHTML=`<h2>جزئیات آیدی</h2><div class=panel><div class=big><i>@</i>${esc(l.uname)}</div>
+ <div class=row style="margin-top:12px"><span class=price style="font-size:22px">${fa(l.price)} تومان</span><span class="b ok">${(l.done||0)>0?'✓ '+fa(l.done)+' فروش موفق':'فروشنده جدید'}</span></div>
+ <p style="margin-top:10px">${esc(l.descr)||'<span class=hint>بدون توضیحات</span>'}</p></div>
+ <div class=panel><div class=trust><span style="font-size:22px">🛡️</span><div><b>مالکیت تأییدشده</b><br>فروشنده با ارسال کد از همین اکانت ثابت کرده صاحب این آیدی است.</div></div></div>
+ <div class=panel><div class=trust><span style="font-size:22px">🔒</span><div><b>خرید امن با امانت‌داری</b><br>پول شما نزد ما می‌ماند؛ بعد از تحویل، قفل زمانی دارید تا تأیید یا شکایت کنید و فقط بعد از آن به فروشنده واریز می‌شود.</div></div></div>`;
+ if(!l.mine)main('خرید امن — '+fa(l.price)+' تومان',()=>act(async()=>{const r=await api('/deals',{lid:l.id});hap('success');stack.pop();cur={v:'deal',a:r.id};render()}));
+}
+
+/* ---------- ثبت آگهی ---------- */
+function sell(){
+ app.innerHTML=`<h2>ثبت آگهی فروش</h2><input class=f id=u dir=ltr placeholder="آیدی، مثلاً myname" autocapitalize=off><input class=f id=p type=number inputmode=numeric placeholder="قیمت به تومان"><textarea class=f id=d rows=3 maxlength=300 placeholder="توضیحات (اختیاری)"></textarea>
+ <div class=panel><div class=trust><span style="font-size:22px">🛡️</span><div>برای اثبات مالکیت یک کد ۴ رقمی می‌گیرید که باید با <b>همان اکانتی که این آیدی را دارد</b> برای بات بفرستید.</div></div></div>`;
+ main('دریافت کد تأیید',()=>act(async()=>{const r=await api('/verify/start',{uname:$('#u').value,price:$('#p').value,descr:$('#d').value});
+  stack.pop();cur={v:'code',a:r};render()}));
+}
+function code(){
+ const r=cur.a;let left=r.ttl;
+ const draw=(msg)=>app.innerHTML=`<h2>کد تأیید مالکیت</h2><div class=panel><div class=code>${r.code}</div><p class=hint style="text-align:center">این عدد را دقیقاً برای @${esc(r.bot)} بفرستید</p></div><p style="text-align:center">${msg||'⏳ '+Math.floor(left/60)+':'+String(left%60).padStart(2,'0')}</p>`;
+ draw();stack=[{v:'home'}];if(W&&W.BackButton)W.BackButton.show();
+ tmr=setInterval(async()=>{left--;try{const s=await api('/verify/status');
+  if(s.state=='ok'){clearInterval(tmr);hap('success');S.seg='market';alertx('مالکیت تأیید و آگهی ثبت شد ✅');stack=[];cur={v:'home'};render();return}
+  if(s.state=='fail'||s.state=='expired'||left<=0){clearInterval(tmr);hap('error');draw('❌ '+(s.why||'کد منقضی شد')+' — دوباره تلاش کنید');return}
+  draw()}catch(e){}},1000);
+}
+function deals(){S.seg='deals';cur={v:'home'};return render()}
+
+/* ---------- معامله ---------- */
+async function deal(){
+ const id=cur.a,d=await api('/deals/'+id),s=ST[d.status],B=d.role=='buyer';
+ let h=`<h2>معامله #${fa(id)}</h2><div class=panel><div class=big style="font-size:24px"><i>@</i>${esc(d.uname)}</div><div class=row style="margin-top:8px"><span>${s[0]}</span><span class=price>${fa(d.price)} تومان</span></div><div class=steps>${[0,1,2,3,4].map(i=>`<i class="${s[1]>=i&&s[1]>=0?'on':''}"></i>`).join('')}</div>`;
+ if(B&&d.status=='wait_pay')h+=`<p>مبلغ را کارت‌به‌کارت کنید و <b>عکس رسید</b> را برای بات بفرستید:</p><div class=code style="font-size:20px;letter-spacing:2px">${esc(d.card)}</div>`;
+ if(d.status=='handed')h+=`<p class=hint>قفل زمانی: ${Math.floor(d.lock/3600)} ساعت و ${Math.floor(d.lock%3600/60)} دقیقه مانده</p>`;
+ if(!B&&d.status=='paid')h+=`<p>خریدار پرداخت کرده. آیدی را تحویل دهید و دکمه زیر را بزنید.</p>`;
+ if(!B)h+=`<div class=fee><span>مبلغ دریافتی شما پس از کارمزد</span><b>${fa(d.payout)} تومان</b></div>`;
+ h+='</div>';
+ if(B&&d.status=='wait_pay')h+=`<button class="btn bad" data-act=cancel>لغو معامله</button>`;
+ if(B&&d.status=='handed')h+=`<button class="btn alt" data-act=confirm>همه‌چیز درست است — آزادسازی پول</button><button class="btn bad" data-act=dispute>شکایت دارم</button>`;
+ if(!B&&d.status=='paid')main('آیدی را تحویل دادم',()=>doact('handed'));
+ app.innerHTML=h;
+ tmr=setInterval(async()=>{try{const n=await api('/deals/'+id);if(n.status!=d.status||n.status=='handed')render()}catch(e){}},8000);
+}
+const doact=a=>act(async()=>{await api('/deals/'+cur.a+'/act',{act:a});hap('success');render()});
+
+document.addEventListener('click',e=>{
+ const t=e.target.closest('[data-seg],[data-chip],[data-go],[data-act]');if(!t)return;
+ if(t.dataset.seg){S.seg=t.dataset.seg;render()}
+ else if(t.dataset.chip){S.chip=t.dataset.chip;document.querySelectorAll('.chip').forEach(c=>c.classList.toggle('on',c.dataset.chip==S.chip));list()}
+ else if(t.dataset.go)go(t.dataset.go,t.dataset.a);
+ else if(t.dataset.act){const a=t.dataset.act;
+  if(a=='cancel'||a=='dispute'||a=='confirm'){const m={cancel:'معامله لغو شود؟',dispute:'شکایت ثبت شود و پشتیبانی بررسی کند؟',confirm:'مطمئنید؟ بعد از آزادسازی، پول به فروشنده می‌رسد.'}[a];
+   W?W.showConfirm(m,ok=>ok&&doact(a)):confirm(m)&&doact(a)}else doact(a)}
+});
+if(W){W.ready();W.expand();theme();W.onEvent('themeChanged',theme);W.BackButton.onClick(back)}
+if(!W||!W.initData)app.innerHTML='<div class=empty><big>🔐</big>این برنامک فقط از داخل سروش‌پلاس (دکمه منوی بات) باز می‌شود.</div>';else render();
+</script>
+</body>
+</html>
