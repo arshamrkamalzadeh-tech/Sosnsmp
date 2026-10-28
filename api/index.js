@@ -107,7 +107,8 @@ async function sessAuth(req) {
   return r && r.id ? { id: String(r.id), username: String(r.username || '').toLowerCase() } : null;
 }
 async function auth(req) {
-  const u = initAuth(req) || (await sessAuth(req));
+  /* شناسهٔ کاربر باید با شناسهٔ او در چت بات یکی باشد؛ پس به‌طور پیش‌فرض فقط نشست ورود با کد معتبر است */
+  const u = (E.USE_INITDATA === '1' ? initAuth(req) : null) || (await sessAuth(req));
   if (!u) throw err(401, 'برای ورود، کد را برای بات بفرستید', 'login');
   return u;
 }
@@ -154,14 +155,26 @@ module.exports = async (req, res) => {
 
 async function route(req, parts) {
   const [a, b, c] = parts, M = req.method, body = req.body || {};
-  if (a === 'webhook') return webhook(req, b);
+  if (a === 'webhook') {
+    try { return await webhook(req, b); }
+    catch (e) { if (e.status === 403) throw e; console.error('webhook error:', e && e.message); return { ok: true }; }
+  }
+  if (a === 'info') {
+    if (!SECRET || b !== SECRET) throw err(403, 'forbidden');
+    return await tg('getWebhookInfo', {});
+  }
   if (a === 'setup') {
     if (!SECRET || b !== SECRET) throw err(403, 'forbidden');
     const url = `https://${req.headers.host}/api/webhook/${SECRET}`;
     return { url, result: await tg('setWebhook', { url }) };
   }
-  if (a === 'ping') return { version: 'v7-login', hasToken: !!TOKEN, hasSecret: !!SECRET, hasAdmin: !!ADMIN, hasRedis: !!(RURL && RTOK) };
-  if (a === 'cron') { await sweep(); return { ok: true }; }
+  if (a === 'ping') return { version: 'v8-fix', hasToken: !!TOKEN, hasSecret: !!SECRET, hasAdmin: !!ADMIN, hasRedis: !!(RURL && RTOK) };
+  if (a === 'cron') {
+    await sweep();
+    /* خودترمیمی: هر روز وب‌هوک بات دوباره ثبت می‌شود */
+    if (SECRET) { const host = E.PUBLIC_HOST || req.headers.host; await tg('setWebhook', { url: `https://${host}/api/webhook/${SECRET}` }); }
+    return { ok: true };
+  }
 
   /* --- ورود با کد داخل چت بات (بدون نیاز به امضای initData) --- */
   if (a === 'login' && b === 'start' && M === 'POST') {
