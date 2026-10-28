@@ -195,15 +195,16 @@ function detail(){
 
 /* ---------- ثبت آگهی ---------- */
 function sell(){
- app.innerHTML=backBar()+`<h2>ثبت آگهی فروش</h2><input class=f id=u dir=ltr placeholder="آیدی، مثلاً myname" autocapitalize=off autocomplete=off><input class=f id=p inputmode=numeric placeholder="قیمت به تومان"><textarea class=f id=d rows=3 maxlength=300 placeholder="توضیحات (اختیاری)"></textarea>
- <div class=panel><div class=trust><span style="font-size:22px">🛡️</span><div>برای اثبات مالکیت یک کد ۴ رقمی می‌گیرید که باید با <b>همان اکانتی که این آیدی را دارد</b> برای بات بفرستید.</div></div></div>`;
- main('دریافت کد تأیید',()=>act(async()=>{
+ const me=(S.data&&S.data.me)||{};
+ app.innerHTML=backBar()+`<h2>ثبت آگهی فروش</h2><input class=f id=u dir=ltr value="${esc(me.username||'')}" placeholder="آیدی، مثلاً myname" autocapitalize=off autocomplete=off><input class=f id=p inputmode=numeric placeholder="قیمت به تومان"><textarea class=f id=d rows=3 maxlength=300 placeholder="توضیحات (اختیاری)"></textarea>
+ <div class=panel><div class=trust><span style="font-size:22px">🛡️</span><div>آگهی فقط برای آیدیِ <b>همین اکانت</b> ثبت می‌شود؛ چون با همین اکانت وارد شده‌اید، مالکیت خودکار تأیید می‌شود. برای فروش آیدی اکانت دیگر، با همان اکانت وارد شوید.</div></div></div>`;
+ main('ثبت آگهی',()=>act(async()=>{
   const uname=$('#u').value.trim().replace(/^@/,'').toLowerCase();
   const price=parseInt(en($('#p').value),10);
   if(!/^[a-z][a-z0-9_]{2,31}$/.test(uname))throw new Error('آیدی معتبر نیست (فقط حروف انگلیسی، عدد و _ ؛ حداقل ۳ کاراکتر و شروع با حرف)');
   if(!price||price<1000)throw new Error('قیمت را درست وارد کنید (حداقل ۱٬۰۰۰ تومان)');
-  const r=await api('/verify/start',{uname,price,descr:$('#d').value.trim()});
-  cur={v:'code',a:r};render()}));
+  await api('/listings',{uname,price,descr:$('#d').value.trim()});
+  hap('success');S.seg='market';S.data=null;stack=[];cur={v:'home'};await render();alertx('آگهی ثبت شد ✅');}));
 }
 function code(){
  const r=cur.a;let left=r.ttl,busy=false,fin=false;
